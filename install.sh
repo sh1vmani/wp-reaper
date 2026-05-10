@@ -43,7 +43,7 @@ composer --version >/dev/null || fail "composer not runnable"
 ok "$(composer --version)"
 
 say "Step 5: packagist reachability"
-curl -fsSL --max-time 5 https://repo.packagist.org/ -o /dev/null || fail "cannot reach packagist.org"
+curl -fsSL --max-time 5 https://repo.packagist.org/packages.json -o /dev/null || fail "cannot reach packagist.org"
 ok "packagist.org reachable"
 
 say "Step 6: PHP_CodeSniffer (global)"
