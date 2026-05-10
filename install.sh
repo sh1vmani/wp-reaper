@@ -60,9 +60,17 @@ phpcs --config-set installed_paths "$COMPOSER_VENDOR_DIR/wp-coding-standards/wpc
 phpcs -i | grep -qi 'WordPress' || fail "WordPress sniff not registered"
 ok "phpcs -i lists WordPress"
 
-say "Step 8: Psalm (global)"
-composer global require --quiet --no-interaction vimeo/psalm
-have psalm || fail "psalm not on PATH"
+say "Step 8: Psalm"
+PSALM_BIN="/usr/local/bin/psalm"
+PSALM_URL="https://github.com/vimeo/psalm/releases/latest/download/psalm.phar"
+if ! have psalm; then
+  TMP="$(mktemp)"
+  curl -fsSL "$PSALM_URL" -o "$TMP"
+  php "$TMP" --version >/dev/null || fail "downloaded psalm phar broken"
+  sudo install -m 0755 "$TMP" "$PSALM_BIN"
+  rm -f "$TMP"
+fi
+psalm --version >/dev/null || fail "psalm not runnable"
 ok "$(psalm --version | head -1)"
 
 say "Step 9: php-stubs/wordpress-stubs"
