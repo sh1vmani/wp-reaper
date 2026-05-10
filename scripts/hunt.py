@@ -230,17 +230,31 @@ def download_plugin(plugin: dict, plugin_dir: Path) -> Path:
 
 
 def run_semgrep(target: Path) -> dict:
-    """Run semgrep with the p/php rule pack against target. Returns parsed JSON."""
-    cmd = ["semgrep", f"--config={SEMGREP_CONFIG}", "--json", str(target)]
+    """Run semgrep with the p/php rule pack against target. Returns parsed JSON.
+
+    Surfaces any semgrep errors to stderr but does not abort the caller.
+    """
+    cmd = ["semgrep", f"--config={SEMGREP_CONFIG}", "--json", "."]
     proc = subprocess.run(
-        cmd, capture_output=True, text=True, timeout=SEMGREP_TIMEOUT_SEC
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=SEMGREP_TIMEOUT_SEC,
+        cwd=target,
     )
-    if proc.returncode >= 2:
-        return {"results": []}
     try:
-        return json.loads(proc.stdout)
+        data = json.loads(proc.stdout)
     except json.JSONDecodeError:
+        snippet = (proc.stderr or proc.stdout)[:300]
+        print(
+            f"[!] semgrep produced unparseable output (exit {proc.returncode}): {snippet}",
+            file=sys.stderr,
+        )
         return {"results": []}
+    for err in data.get("errors", []):
+        msg = err.get("message", repr(err))[:200]
+        print(f"[!] semgrep error: {msg}", file=sys.stderr)
+    return data
 
 
 def find_nopriv_handlers(target: Path) -> list[tuple[Path, int, str]]:
