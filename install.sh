@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # wp-reaper toolchain installer for Kali Linux
 # Host: PHP 8.x CLI + WP-CLI + Python venv.
-# Container: PHPCS + Psalm + WPCS + wordpress-stubs (image: wp-reaper-tools:latest).
+# Container: PHPCS + Psalm + WPCS + wordpress-stubs + Semgrep.
 set -euo pipefail
 
 REPO_DIR="$(pwd)"
@@ -98,14 +98,29 @@ have python3 || sudo apt-get install -y python3 python3-venv
 "$VENV_DIR/bin/python" -V >/dev/null || fail "venv python not runnable"
 ok "$("$VENV_DIR/bin/python" -V)"
 
-say "Step 10: Python packages"
+say "Step 10: Python packages (host)"
 "$VENV_DIR/bin/pip" install --quiet --upgrade pip
-"$VENV_DIR/bin/pip" install --quiet semgrep requests rich typer
-"$VENV_DIR/bin/semgrep" --version >/dev/null || fail "semgrep not runnable"
+"$VENV_DIR/bin/pip" install --quiet --no-cache-dir requests rich typer
 for pkg in requests rich typer; do
   "$VENV_DIR/bin/python" -c "import $pkg" 2>/dev/null || fail "import $pkg failed"
 done
-ok "semgrep $("$VENV_DIR/bin/semgrep" --version) + requests/rich/typer"
+ok "requests/rich/typer installed in venv"
+
+say "Step 11: Semgrep (containerized)"
+docker pull semgrep/semgrep:latest >/dev/null
+docker run --rm semgrep/semgrep:latest semgrep --version >/dev/null || fail "semgrep image broken"
+cat > "$WRAPPERS_DIR/semgrep" <<'WRAPPER'
+#!/usr/bin/env bash
+exec docker run --rm -i \
+  -v "$PWD:/src" \
+  -w /src \
+  -u "$(id -u):$(id -g)" \
+  semgrep/semgrep:latest \
+  semgrep "$@"
+WRAPPER
+chmod +x "$WRAPPERS_DIR/semgrep"
+"$WRAPPERS_DIR/semgrep" --version >/dev/null || fail "semgrep wrapper broken"
+ok "semgrep wrapper at $WRAPPERS_DIR/semgrep"
 
 cat <<EOF
 
@@ -116,15 +131,16 @@ cat <<EOF
   docker    $(command -v docker)
   wp        $(command -v wp)
   python    $VENV_DIR/bin/python
-  semgrep   $VENV_DIR/bin/semgrep
+  semgrep   $WRAPPERS_DIR/semgrep      (wrapper -> semgrep/semgrep:latest)
   phpcs     $WRAPPERS_DIR/phpcs        (wrapper -> $TOOLS_IMAGE)
   psalm     $WRAPPERS_DIR/psalm        (wrapper -> $TOOLS_IMAGE)
 
 [INFO] How to invoke:
   phpcs <args>      -- runs in container, mounts current dir as /app
   psalm <args>      -- runs in container, mounts current dir as /app
+  semgrep <args>    -- runs in container, mounts current dir as /src
   wp <args>         -- runs natively on host
-  semgrep <args>    -- after activating the venv
+  python            -- activate the venv first, then use requests/rich/typer
 
 Add this to your shell rc if not already present:
   export PATH="$WRAPPERS_DIR:\$PATH"
