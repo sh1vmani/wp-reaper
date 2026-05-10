@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # wp-reaper toolchain installer for Kali Linux
+# Host: PHP 8.x CLI + WP-CLI + Python venv.
+# Container: Composer + PHPCS + WPCS + Psalm + wordpress-stubs (image: wp-reaper-tools:latest).
 set -euo pipefail
 
-COMPOSER_BIN_DIR="$HOME/.config/composer/vendor/bin"
-COMPOSER_VENDOR_DIR="$HOME/.config/composer/vendor"
-VENV_DIR="$(pwd)/.venv"
+REPO_DIR="$(pwd)"
+DOCKERFILE_DIR="$REPO_DIR/docker/tools"
+TOOLS_IMAGE="wp-reaper-tools:latest"
+WRAPPERS_DIR="$HOME/.local/bin"
+VENV_DIR="$REPO_DIR/.venv"
 WP_CLI_URL="https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar"
 WP_CLI_BIN="/usr/local/bin/wp"
 
@@ -12,8 +16,6 @@ say()  { printf '\n[+] %s\n' "$*"; }
 ok()   { printf '    verify: %s\n' "$*"; }
 fail() { printf '\n[!] %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
-
-export PATH="$COMPOSER_BIN_DIR:$PATH"
 
 say "Step 0: detect Kali Linux"
 grep -qE '^ID=kali' /etc/os-release || fail "not Kali Linux"
@@ -27,7 +29,7 @@ say "Step 2: apt update"
 sudo apt-get update -qq
 ok "apt index refreshed"
 
-say "Step 3: PHP 8.x CLI + extensions"
+say "Step 3: PHP 8.x CLI on host (for WP-CLI)"
 if ! have php || ! php -v 2>/dev/null | grep -q '^PHP 8\.'; then
   sudo apt-get install -y php-cli php-curl php-mbstring php-xml php-zip
 fi
@@ -37,49 +39,49 @@ for ext in curl mbstring xml zip; do
 done
 ok "$(php -v | head -1) with curl/mbstring/xml/zip"
 
-say "Step 4: Composer"
-have composer || sudo apt-get install -y composer
-composer --version >/dev/null || fail "composer not runnable"
-ok "$(composer --version)"
+say "Step 4: Docker"
+have docker || fail "docker not installed -- 'sudo apt-get install docker.io' and add yourself to the docker group"
+docker info >/dev/null 2>&1 || fail "docker daemon not reachable -- check service or user docker group membership"
+ok "$(docker --version)"
 
-say "Step 5: packagist reachability"
-curl -fsSL --max-time 5 https://repo.packagist.org/packages.json -o /dev/null || fail "cannot reach packagist.org"
-ok "packagist.org reachable"
+say "Step 5: pull composer:2.8 base image"
+docker pull composer:2.8 >/dev/null
+docker image inspect composer:2.8 >/dev/null || fail "composer:2.8 image not present"
+ok "composer:2.8 pulled"
 
-say "Step 6: PHP_CodeSniffer (global)"
-composer global require --quiet --no-interaction "squizlabs/php_codesniffer:^3.13"
-have phpcs || fail "phpcs not on PATH ($COMPOSER_BIN_DIR)"
-ok "$(phpcs --version)"
+say "Step 6: build $TOOLS_IMAGE"
+[[ -f "$DOCKERFILE_DIR/Dockerfile" ]] || fail "Dockerfile missing at $DOCKERFILE_DIR/Dockerfile"
+docker build -q -t "$TOOLS_IMAGE" "$DOCKERFILE_DIR" >/dev/null
+docker run --rm "$TOOLS_IMAGE" phpcs --version >/dev/null || fail "phpcs broken in image"
+docker run --rm "$TOOLS_IMAGE" psalm --version >/dev/null || fail "psalm broken in image"
+docker run --rm "$TOOLS_IMAGE" phpcs -i | grep -qi WordPress || fail "WordPress sniff missing in image"
+docker run --rm "$TOOLS_IMAGE" test -f /composer/vendor/php-stubs/wordpress-stubs/wordpress-stubs.php || fail "wordpress-stubs missing in image"
+ok "$TOOLS_IMAGE built and verified"
 
-say "Step 7: WordPress-Coding-Standards"
-composer global config --no-plugins allow-plugins.dealerdirect/phpcodesniffer-composer-installer true
-composer global require --quiet --no-interaction \
-  dealerdirect/phpcodesniffer-composer-installer \
-  wp-coding-standards/wpcs
-phpcs --config-set installed_paths "$COMPOSER_VENDOR_DIR/wp-coding-standards/wpcs" >/dev/null
-phpcs -i | grep -qi 'WordPress' || fail "WordPress sniff not registered"
-ok "phpcs -i lists WordPress"
+say "Step 7: install wrapper scripts to $WRAPPERS_DIR"
+mkdir -p "$WRAPPERS_DIR"
+mkdir -p "$HOME/.cache/wp-reaper-composer"
+for cmd in phpcs psalm composer; do
+  cat > "$WRAPPERS_DIR/$cmd" <<WRAPPER
+#!/usr/bin/env bash
+exec docker run --rm -i \\
+  -v "\$PWD:/app" \\
+  -v "\$HOME/.cache/wp-reaper-composer:/tmp/composer-cache" \\
+  -w /app \\
+  -u "\$(id -u):\$(id -g)" \\
+  -e HOME=/tmp \\
+  -e COMPOSER_CACHE_DIR=/tmp/composer-cache \\
+  $TOOLS_IMAGE \\
+  $cmd "\$@"
+WRAPPER
+  chmod +x "$WRAPPERS_DIR/$cmd"
+done
+"$WRAPPERS_DIR/phpcs" --version >/dev/null || fail "phpcs wrapper not runnable"
+"$WRAPPERS_DIR/psalm" --version >/dev/null || fail "psalm wrapper not runnable"
+"$WRAPPERS_DIR/composer" --version >/dev/null || fail "composer wrapper not runnable"
+ok "wrappers installed at $WRAPPERS_DIR/{phpcs,psalm,composer}"
 
-say "Step 8: Psalm"
-PSALM_BIN="/usr/local/bin/psalm"
-PSALM_URL="https://github.com/vimeo/psalm/releases/latest/download/psalm.phar"
-if ! have psalm; then
-  TMP="$(mktemp)"
-  curl -fsSL "$PSALM_URL" -o "$TMP"
-  php "$TMP" --version >/dev/null || fail "downloaded psalm phar broken"
-  sudo install -m 0755 "$TMP" "$PSALM_BIN"
-  rm -f "$TMP"
-fi
-psalm --version >/dev/null || fail "psalm not runnable"
-ok "$(psalm --version | head -1)"
-
-say "Step 9: php-stubs/wordpress-stubs"
-composer global require --quiet --no-interaction php-stubs/wordpress-stubs
-STUBS="$COMPOSER_VENDOR_DIR/php-stubs/wordpress-stubs/wordpress-stubs.php"
-[[ -f "$STUBS" ]] || fail "wordpress-stubs file missing: $STUBS"
-ok "stubs at $STUBS"
-
-say "Step 10: WP-CLI"
+say "Step 8: WP-CLI"
 if ! have wp; then
   TMP="$(mktemp)"
   curl -fsSL "$WP_CLI_URL" -o "$TMP"
@@ -90,13 +92,13 @@ fi
 wp --info >/dev/null || fail "wp not runnable"
 ok "$(wp cli version)"
 
-say "Step 11: Python venv at $VENV_DIR"
+say "Step 9: Python venv at $VENV_DIR"
 have python3 || sudo apt-get install -y python3 python3-venv
 [[ -d "$VENV_DIR" ]] || python3 -m venv "$VENV_DIR"
 "$VENV_DIR/bin/python" -V >/dev/null || fail "venv python not runnable"
 ok "$("$VENV_DIR/bin/python" -V)"
 
-say "Step 12: Python packages"
+say "Step 10: Python packages"
 "$VENV_DIR/bin/pip" install --quiet --upgrade pip
 "$VENV_DIR/bin/pip" install --quiet semgrep requests rich typer
 "$VENV_DIR/bin/semgrep" --version >/dev/null || fail "semgrep not runnable"
@@ -111,16 +113,23 @@ cat <<EOF
 
 [INFO] Installed paths:
   php       $(command -v php)
-  composer  $(command -v composer)
-  phpcs     $(command -v phpcs)
-  psalm     $(command -v psalm)
+  docker    $(command -v docker)
   wp        $(command -v wp)
   python    $VENV_DIR/bin/python
   semgrep   $VENV_DIR/bin/semgrep
-  stubs     $STUBS
+  phpcs     $WRAPPERS_DIR/phpcs        (wrapper -> $TOOLS_IMAGE)
+  psalm     $WRAPPERS_DIR/psalm        (wrapper -> $TOOLS_IMAGE)
+  composer  $WRAPPERS_DIR/composer     (wrapper -> $TOOLS_IMAGE)
+
+[INFO] How to invoke:
+  phpcs <args>      -- runs in container, mounts current dir as /app
+  psalm <args>      -- runs in container, mounts current dir as /app
+  composer <args>   -- runs in container, mounts current dir as /app
+  wp <args>         -- runs natively on host
+  semgrep <args>    -- after activating the venv
 
 Add this to your shell rc if not already present:
-  export PATH="$COMPOSER_BIN_DIR:\$PATH"
+  export PATH="$WRAPPERS_DIR:\$PATH"
 
 Activate the Python venv with:
   source $VENV_DIR/bin/activate
