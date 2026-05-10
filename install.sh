@@ -47,7 +47,7 @@ curl -fsSL --max-time 5 https://repo.packagist.org/packages.json -o /dev/null ||
 ok "packagist.org reachable"
 
 say "Step 6: PHP_CodeSniffer (global)"
-composer global require --quiet --no-interaction squizlabs/php_codesniffer
+composer global require --quiet --no-interaction "squizlabs/php_codesniffer:^3.13"
 have phpcs || fail "phpcs not on PATH ($COMPOSER_BIN_DIR)"
 ok "$(phpcs --version)"
 
