@@ -1,0 +1,107 @@
+# scripts/hunt-blocklist.txt
+# Plugins to skip during hunt.py runs.
+# Format: one slug per line. Blank lines and # comments (full or inline) are ignored.
+#
+# NOTE: hunt.py also enforces a substring filter that excludes any
+# slug matching /security|antivirus|firewall/i. Plugins matching
+# that pattern do not need to be listed here unless they are
+# excluded for a different reason as well.
+#
+# The install-count filter [1000, 50000] already excludes most top-100
+# plugins automatically. The entries below are defense in depth for
+# vendor-published plugins, well-known security plugins (whose slugs do
+# not always contain "security" or "antivirus"), MainWP plugins
+# (HackerOne scope), and plugins on Patchstack's frequently-audited list.
+
+# Automattic
+akismet
+bbpress
+buddypress
+classic-editor
+classic-widgets
+crowdsignal-polls
+gutenberg
+hello-dolly
+jetpack
+sensei-lms
+vaultpress
+woocommerce
+woocommerce-admin
+woocommerce-gateway-stripe
+woocommerce-payments
+woocommerce-paypal-payments
+woocommerce-services
+wp-super-cache
+
+# Yoast
+duplicate-post
+wordpress-seo
+yoast-test-helper
+
+# Elementor
+elementor
+hello-elementor
+
+# WPBakery
+js_composer
+
+# Awesome Motive
+all-in-one-seo-pack
+formidable
+google-analytics-for-wordpress  # MonsterInsights brand
+optinmonster
+wpforms-lite
+
+# High-install non-vendor (defense in depth for fluctuating install counts)
+advanced-custom-fields
+all-in-one-wp-migration
+astra
+backwpup
+broken-link-checker
+contact-form-7
+duplicator
+google-site-kit
+litespeed-cache
+mailpoet
+ninja-forms
+really-simple-ssl
+redirection
+seo-by-rank-math
+tablepress
+ultimate-member
+updraftplus
+w3-total-cache
+wp-job-manager
+wp-mail-smtp
+wp-smushit
+
+# Security plugins not caught by substring rule
+gotmls
+hide-my-wp
+limit-login-attempts
+limit-login-attempts-reloaded
+loginizer
+loginpress
+sucuri-scanner
+wordfence
+wps-hide-login
+
+# MainWP (HackerOne scope per project rules, not Wordfence/Patchstack)
+mainwp
+mainwp-child
+mainwp-child-reports
+
+# Patchstack frequently audited
+elementor-addons-and-templates
+essential-addons-for-elementor
+events-manager
+happy-elementor-addons
+mailoptin
+modern-events-calendar-lite
+premium-addons-for-elementor
+qi-addons-for-elementor
+royal-elementor-addons
+simple-membership
+the-events-calendar
+ultimate-addons-for-gutenberg
+wpforo
