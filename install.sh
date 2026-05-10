@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # wp-reaper toolchain installer for Kali Linux
 # Host: PHP 8.x CLI + WP-CLI + Python venv.
-# Container: Composer + PHPCS + WPCS + Psalm + wordpress-stubs (image: wp-reaper-tools:latest).
+# Container: PHPCS + Psalm + WPCS + wordpress-stubs (image: wp-reaper-tools:latest).
 set -euo pipefail
 
 REPO_DIR="$(pwd)"
@@ -44,10 +44,10 @@ have docker || fail "docker not installed -- 'sudo apt-get install docker.io' an
 docker info >/dev/null 2>&1 || fail "docker daemon not reachable -- check service or user docker group membership"
 ok "$(docker --version)"
 
-say "Step 5: pull composer:2.7 base image"
-docker pull composer:2.7 >/dev/null
-docker image inspect composer:2.7 >/dev/null || fail "composer:2.7 image not present"
-ok "composer:2.7 pulled"
+say "Step 5: pull php:8.3-cli base image"
+docker pull php:8.3-cli >/dev/null
+docker image inspect php:8.3-cli >/dev/null || fail "php:8.3-cli image not present"
+ok "php:8.3-cli pulled"
 
 say "Step 6: build $TOOLS_IMAGE"
 [[ -f "$DOCKERFILE_DIR/Dockerfile" ]] || fail "Dockerfile missing at $DOCKERFILE_DIR/Dockerfile"
@@ -55,13 +55,14 @@ docker build -q -t "$TOOLS_IMAGE" "$DOCKERFILE_DIR" >/dev/null
 docker run --rm "$TOOLS_IMAGE" phpcs --version >/dev/null || fail "phpcs broken in image"
 docker run --rm "$TOOLS_IMAGE" psalm --version >/dev/null || fail "psalm broken in image"
 docker run --rm "$TOOLS_IMAGE" phpcs -i | grep -qi WordPress || fail "WordPress sniff missing in image"
-docker run --rm "$TOOLS_IMAGE" test -f /composer/vendor/php-stubs/wordpress-stubs/wordpress-stubs.php || fail "wordpress-stubs missing in image"
+docker run --rm "$TOOLS_IMAGE" test -f /opt/wordpress-stubs/wordpress-stubs.php || fail "wordpress-stubs missing in image"
 ok "$TOOLS_IMAGE built and verified"
 
 say "Step 7: install wrapper scripts to $WRAPPERS_DIR"
 mkdir -p "$WRAPPERS_DIR"
 mkdir -p "$HOME/.cache/wp-reaper-composer"
-for cmd in phpcs psalm composer; do
+rm -f "$WRAPPERS_DIR/composer"  # remove stale composer wrapper from previous install
+for cmd in phpcs psalm; do
   cat > "$WRAPPERS_DIR/$cmd" <<WRAPPER
 #!/usr/bin/env bash
 exec docker run --rm -i \\
@@ -78,8 +79,7 @@ WRAPPER
 done
 "$WRAPPERS_DIR/phpcs" --version >/dev/null || fail "phpcs wrapper not runnable"
 "$WRAPPERS_DIR/psalm" --version >/dev/null || fail "psalm wrapper not runnable"
-"$WRAPPERS_DIR/composer" --version >/dev/null || fail "composer wrapper not runnable"
-ok "wrappers installed at $WRAPPERS_DIR/{phpcs,psalm,composer}"
+ok "wrappers installed at $WRAPPERS_DIR/{phpcs,psalm}"
 
 say "Step 8: WP-CLI"
 if ! have wp; then
@@ -119,12 +119,10 @@ cat <<EOF
   semgrep   $VENV_DIR/bin/semgrep
   phpcs     $WRAPPERS_DIR/phpcs        (wrapper -> $TOOLS_IMAGE)
   psalm     $WRAPPERS_DIR/psalm        (wrapper -> $TOOLS_IMAGE)
-  composer  $WRAPPERS_DIR/composer     (wrapper -> $TOOLS_IMAGE)
 
 [INFO] How to invoke:
   phpcs <args>      -- runs in container, mounts current dir as /app
   psalm <args>      -- runs in container, mounts current dir as /app
-  composer <args>   -- runs in container, mounts current dir as /app
   wp <args>         -- runs natively on host
   semgrep <args>    -- after activating the venv
 
