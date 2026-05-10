@@ -1,6 +1,13 @@
 # wp-reaper Progress
 
-## Status: Setting up toolchain
+## Status: Toolchain ready, building scanner
+
+## Verified Working
+- phpcs 3.7.2 (containerized)
+- psalm 6.16.1 (containerized)
+- semgrep 1.161.0 (containerized)
+- wp-cli 2.12.0 (host)
+- Python 3.13.12 venv with requests/rich/typer (host)
 
 ## Architecture
 Replacing wp-bug-hunter regex scanner with:
@@ -12,7 +19,7 @@ Replacing wp-bug-hunter regex scanner with:
 6. SQLite tracking + submission management
 
 ## Completed
-- [ ] Toolchain install
+- [x] Toolchain install
 - [ ] Project structure
 - [ ] Plugin poller
 - [ ] Semgrep orchestrator
