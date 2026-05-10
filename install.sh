@@ -82,14 +82,16 @@ done
 ok "wrappers installed at $WRAPPERS_DIR/{phpcs,psalm}"
 
 say "Step 8: WP-CLI"
-if ! have wp; then
+if ! have wp || [[ ! -s "$WP_CLI_BIN" ]]; then
   TMP="$(mktemp)"
   curl -fsSL "$WP_CLI_URL" -o "$TMP"
+  [[ -s "$TMP" ]] || fail "WP-CLI download produced zero-byte file"
   php "$TMP" --info >/dev/null || fail "downloaded WP-CLI phar broken"
   sudo install -m 0755 "$TMP" "$WP_CLI_BIN"
   rm -f "$TMP"
 fi
-wp --info >/dev/null || fail "wp not runnable"
+[[ -s "$WP_CLI_BIN" ]] || fail "WP-CLI binary is zero bytes at $WP_CLI_BIN"
+wp --info | grep -q "WP-CLI version" || fail "wp --info missing expected output"
 ok "$(wp cli version)"
 
 say "Step 9: Python venv at $VENV_DIR"
