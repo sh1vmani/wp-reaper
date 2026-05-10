@@ -44,10 +44,10 @@ have docker || fail "docker not installed -- 'sudo apt-get install docker.io' an
 docker info >/dev/null 2>&1 || fail "docker daemon not reachable -- check service or user docker group membership"
 ok "$(docker --version)"
 
-say "Step 5: pull composer:2.8 base image"
-docker pull composer:2.8 >/dev/null
-docker image inspect composer:2.8 >/dev/null || fail "composer:2.8 image not present"
-ok "composer:2.8 pulled"
+say "Step 5: pull composer:2.7 base image"
+docker pull composer:2.7 >/dev/null
+docker image inspect composer:2.7 >/dev/null || fail "composer:2.7 image not present"
+ok "composer:2.7 pulled"
 
 say "Step 6: build $TOOLS_IMAGE"
 [[ -f "$DOCKERFILE_DIR/Dockerfile" ]] || fail "Dockerfile missing at $DOCKERFILE_DIR/Dockerfile"

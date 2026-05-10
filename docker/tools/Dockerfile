@@ -1,4 +1,4 @@
-FROM composer:2.8
+FROM composer:2.7
 
 ENV COMPOSER_HOME=/composer
 ENV PATH=/composer/vendor/bin:$PATH
