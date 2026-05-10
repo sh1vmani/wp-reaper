@@ -116,13 +116,17 @@ def fetch_page(page: int) -> dict:
 
 def collect_candidates(pages: int, blocklist: set[str]) -> list[dict]:
     """Walk N API pages, return plugins inside the install band that pass the blocklist."""
+    seen: set[str] = set()
     out: list[dict] = []
     for p in range(1, pages + 1):
         data = fetch_page(p)
         for plugin in data.get("plugins", []):
             slug = plugin.get("slug", "")
+            if slug in seen:
+                continue
             installs = plugin.get("active_installs", 0)
             if INSTALL_BAND_MIN <= installs <= INSTALL_BAND_MAX and not is_blocked(slug, blocklist):
+                seen.add(slug)
                 out.append(plugin)
     return out
 
